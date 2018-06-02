@@ -1,0 +1,407 @@
+const PADDLE_WIDTH = 100;
+const PADDLE_HEIGHT = 20;
+const BRICKS_WIDTH = 60;
+const BRICKS_HEIGHT = 30;
+const BALL_RADIUS = 8;
+const FULL_X_SPEED = 7;
+var stage;
+var paddle;
+var ball; // this is global variable
+var bricks = [];
+var score = 0;
+var lives = 3;
+var scoreText;
+var gameStarted = false;
+const KEYCODE_LEFT = 37;
+const KEYCODE_RIGHT = 39;
+const SPACEBAR = 32;
+var moveLeft = false;
+var moveRight = false;
+var highScore = 0;
+
+
+function init()
+{
+  if(typeof(Storage) !== "undefined")
+  {
+    if(localStorage.highScore==undefined)
+    {
+      localStorage.highScore = 0;
+    }
+    highScore = localStorage.highScore;
+
+  }
+  else
+  {
+    hightScore = 0;
+  }
+
+  stage = new createjs.Stage("demoCanvas");
+
+  // add mobile support
+  createjs.Touch.enable(stage);
+
+  createjs.Ticker.setFPS(60);
+  createjs.Ticker.addEventListener("tick", tick);
+
+  createScoreText();
+  addScore(0);
+
+  createPaddle();
+  createBall();
+  createBrickGrid();
+
+  window.onkeyup = keyUpHandler;
+  window.onkeydown = keyDownHandler;
+
+  stage.on("stagemousemove",function(event)
+  {
+      paddle.x = stage.mouseX;
+  });
+
+  stage.on("stagemousedown",function(event)
+  {
+    startLevel();
+  });
+
+  //
+  stage.canvas.height = window.innerHeight;
+}
+
+
+
+function tick()
+{
+
+  stage.update();
+
+  if(moveLeft)
+  {
+    paddle.x -= 10;
+  }
+  if(moveRight)
+  {
+    paddle.x += 10;
+  }
+
+  if(paddle.x + PADDLE_WIDTH/2 > stage.canvas.width)
+  {
+    paddle.x = stage.canvas.width - PADDLE_WIDTH/2;
+  }
+  if(paddle.x - PADDLE_WIDTH/2 < 0)
+  {
+    paddle.x = PADDLE_WIDTH/2;
+  }
+
+  if(!gameStarted)
+  {
+    ball.x = paddle.x;
+    ball.y = paddle.y - PADDLE_HEIGHT/2 - BALL_RADIUS;
+    stage.update();
+    return;
+  }
+
+  stage.update();
+  console.log("inside tick() - ball.up = " + ball.up);
+  if (ball.up)
+  {
+    ball.y -= ball.ySpeed;
+  }
+  else
+  {
+    ball.y += ball.ySpeed;
+  }
+
+  if (ball.right)
+  {
+    ball.x += ball.xSpeed;
+  }
+  else
+  {
+    ball.x -= ball.xSpeed;
+  }
+
+  for(var i = 0; i < bricks.length; i++)
+  {
+    if(checkCollision(ball, bricks[i]))
+    {
+      destroyBrick(bricks[i]);
+      addScore(100);
+      bricks.splice(i,1);
+      i--;
+    }
+  }
+
+  if(checkCollision(ball,paddle))
+  {
+    newBallXSpeedAfterCollision(ball,paddle);
+  }
+
+  if(ball.x + BALL_RADIUS>=stage.canvas.width)
+  {
+    ball.x = stage.canvas.width - BALL_RADIUS;
+    ball.right = false;
+  }
+
+  if(ball.x - BALL_RADIUS<=0)
+  {
+    ball.x = BALL_RADIUS;
+    ball.right = true;
+  }
+
+  if(ball.y - BALL_RADIUS<=0)
+  {
+    ball.y = BALL_RADIUS;
+    ball.up = false;
+  }
+
+  if(ball.y + BALL_RADIUS>=stage.canvas.height)
+  {
+    loseLife();
+  }
+
+  ball.lastX = ball.x;
+  ball.lastY = ball.y;
+}
+
+function startLevel()
+{
+  if(!gameStarted)
+  {
+    gameStarted = true;
+    ball.xSpeed = 5;
+    ball.ySpeed = 5;
+    ball.up = true;
+    ball.right = true;
+  }
+}
+
+function keyDownHandler(e)
+{
+  switch(e.keyCode)
+  {
+  case KEYCODE_LEFT: moveLeft = true; break;
+  case KEYCODE_RIGHT: moveRight = true; break;
+  case SPACEBAR: startLevel(); break;
+  }
+}
+
+function keyUpHandler(e)
+{
+  switch(e.keyCode)
+  {
+  case KEYCODE_LEFT: moveLeft = false; break;
+  case KEYCODE_RIGHT: moveRight = false; break;
+  }
+}
+
+function addScore(points)
+{
+  score += points;
+  updateStatusLine();
+
+}
+
+function loseLife()
+{
+  lives--;
+  updateStatusLine();
+  ball.xSpeed = 0;
+  ball.ySpeed = 0;
+  ball.x = paddle.x;
+  ball.y = paddle.y - PADDLE_HEIGHT/2 - BALL_RADIUS;
+  gameStarted = false;
+
+  if(lives == 0)
+  {
+    if(highScore < score)
+    {
+      highScore = score;
+      localStorage.highScore = score;
+    }
+    alert("Game Over, Your Score Was: " + score);
+    lives = 3;
+    score = 0;
+  }
+  updateStatusLine();
+}
+
+function createScoreText()
+{
+  scoreText = new createjs.Text("","16px Arial","#000000");
+  scoreText.y = stage.canvas.height - 16;
+  stage.addChild(scoreText);
+}
+
+function updateStatusLine()
+{
+  scoreText.text = "Score: " + score  + " / Lives: " + lives + "/ High Score: " + highScore;
+}
+
+function checkCollision(ball, hitElement)
+{
+  var leftBorder = (hitElement.x - hitElement.getBounds().width/2);
+  var rightBorder = (hitElement.x + hitElement.getBounds().width/2);
+  var topBorder = (hitElement.y - hitElement.getBounds().height/2);
+  var bottomBorder = (hitElement.y + hitElement.getBounds().height/2);
+
+  var previousBallLeftBorder = (ball.lastX - BALL_RADIUS);
+  var previousBallRightBorder = (ball.lastX + BALL_RADIUS);
+  var previousBallTopBorder = (ball.lastY - BALL_RADIUS);
+  var previousBallBottomBorder = (ball.lastY + BALL_RADIUS);
+
+  var ballLeftBorder = ball.x - BALL_RADIUS;
+  var ballRightBorder = ball.x + BALL_RADIUS;
+  var ballTopBorder = ball.y - BALL_RADIUS;
+  var ballBottomBorder = ball.y + BALL_RADIUS;
+
+  if((ballLeftBorder <= rightBorder) && (ballRightBorder >= leftBorder) && (ballTopBorder <=
+    bottomBorder)&&(ballBottomBorder >= topBorder))
+    {
+      if((ballTopBorder <= bottomBorder) && (previousBallTopBorder > bottomBorder))
+      {
+        //hit from bottom
+        ball.up = false;
+        ball.y = bottomBorder + BALL_RADIUS;
+      }
+
+      if((ballBottomBorder >= topBorder) && (previousBallBottomBorder < topBorder))
+      {
+        //hit from top
+        ball.up = true;
+        ball.y = topBorder - BALL_RADIUS;
+      }
+
+      if((ballLeftBorder <= rightBorder)&&(previousBallLeftBorder > rightBorder))
+      {
+        //hit from right
+        ball.right = true;
+        ball.x = rightBorder + BALL_RADIUS;
+      }
+
+      if((ballRightBorder >= leftBorder)&&(previousBallRightBorder < leftBorder))
+      {
+        //hit from left
+        ball.right = false;
+        ball.x = leftBorder - BALL_RADIUS;
+      }
+
+      ball.lastX = ball.x;
+      ball.lastY = ball.y;
+
+      return true;
+    }
+  return false;
+}
+
+
+  function newBallXSpeedAfterCollision(ball,hitElement)
+  {
+    var startPoint = hitElement.x - hitElement.getBounds().width/2;
+    var midPoint = hitElement.x;
+    var endPoint = hitElement.x + hitElement.getBounds().width/2;
+
+    if(ball.x < midPoint)
+    {
+      ball.right = false;
+      ball.xSpeed = FULL_X_SPEED - ((ball.x - startPoint)/(midPoint - startPoint)) * FULL_X_SPEED
+    }
+    else
+    {
+      ball.xSpeed = FULL_X_SPEED - ((endPoint - ball.x)/(endPoint - midPoint)) * FULL_X_SPEED
+      ball.right = true;
+    }
+
+  }
+
+  function createBrick(x, y)
+  {
+    console.log("x = " + x + ", y = " + y);
+    var brick = new createjs.Shape();
+    brick.graphics.beginFill('#E615BC');
+    brick.graphics.drawRect(0, 0, BRICKS_WIDTH, BRICKS_HEIGHT);
+    brick.graphics.endFill();
+    // stage.addChild(brick);
+
+    brick.regX = BRICKS_WIDTH/2
+    brick.regY = BRICKS_HEIGHT/2
+
+    brick.x = x;
+    brick.y = y;
+
+    brick.setBounds(brick.regX,brick.regY,BRICKS_WIDTH,BRICKS_HEIGHT);
+    // brick.regX = BRICKS_WIDTH/2;
+    // brick.regY = BRICKS_HEIGHT/2;
+    stage.addChild(brick);
+
+
+    bricks.push(brick);
+  }
+
+  function createBrickGrid()
+  {
+    for(var i = 0; i < 14; i++)
+      for(var j = 0; j < 5; j++)
+      {
+        createBrick(i * (BRICKS_WIDTH+10) + 40, j * (BRICKS_HEIGHT+5) + 20);
+      }
+  }
+
+
+  function createBall()
+  {
+    /*
+      Notice: problem is here!!!
+      You decalre a new ball object inside this function by: var ball = new createjs.Shape();
+      This 'local' variable ball is different from the 'global' variable ball.
+      There are two different objects.
+      The global variable define on the top of script: var ball - still null, we do not assign
+      any value to it.
+
+      How to fix it: change the below line
+      var ball = new createjs.Shape(); TO
+      ball = new createjs.Shape();
+
+      That is, the global variable 'ball' is assigned a value. Then, it can be used from
+      inside other functions (e.g. tick() function).
+
+    */
+    // var ball = new createjs.Shape(); -- This line declares a 'local' ball variable.
+    ball = new createjs.Shape();
+    ball.graphics.beginFill("tomato").drawCircle(0, 0, BALL_RADIUS);
+    ball.x = paddle.x;
+    ball.y = paddle.y - PADDLE_HEIGHT/2 - BALL_RADIUS;
+    stage.addChild(ball);
+
+    ball.up = true;
+    ball.right = true;
+    ball.xSpeed = 0;
+    ball.ySpeed = 0;
+    ball.lastX = ball.x;
+    ball.lastY = ball.y;
+
+  }
+
+  function destroyBrick(brick)
+  {
+    createjs.Tween.get(brick,{}).to({scaleX:0,scaleY:0}, 500);
+    setTimeout(removeBrickFromScreen,500,brick);
+  }
+
+  function removeBrickFromScreen(brick)
+  {
+    stage.removeChild(brick);
+
+  }
+
+  function createPaddle()
+  {
+    paddle = new createjs.Shape();
+    paddle.graphics.beginFill('#00E600').drawRect(0, 0, PADDLE_WIDTH, PADDLE_HEIGHT);
+    paddle.x = stage.canvas.width/2 - PADDLE_WIDTH/2;
+    paddle.y = stage.canvas.height*0.9;
+    paddle.regX = PADDLE_WIDTH/2;
+    paddle.regY = PADDLE_HEIGHT/2;
+    paddle.setBounds(paddle.regX,paddle.regY,PADDLE_WIDTH,PADDLE_HEIGHT);
+    stage.addChild(paddle);
+  }
